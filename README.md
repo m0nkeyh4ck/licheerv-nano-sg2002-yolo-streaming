@@ -17,33 +17,15 @@
 
 - [01. Project Overview](#01-project-overview)
 - [02. Hardware Platform](#02-hardware-platform)
-  - [LicheeRV Nano — SG2002](#licheerv-nano--sg2002)
-  - [Board Variants](#board-variants)
-  - [Hardware Diagrams & Visual References](#hardware-diagrams--visual-references)
 - [03. Development Environment Setup](#03-development-environment-setup)
-  - [3.1. Host Prerequisites & Docker Installation](#31-host-prerequisites--docker-installation)
-  - [3.2. Clone the Build Environment](#32-clone-the-build-environment)
-  - [3.3. Start the Docker Container](#33-start-the-docker-container)
 - [04. Base Dependencies & Software Setup](#04-base-dependencies--software-setup)
-  - [4.1. Clone CVI TDL SDK](#41-clone-cvi-tdl-sdk)
-  - [4.2. Clone CivetWeb Repository](#42-clone-civetweb-repository)
 - [05. System Compilation & Application Build](#05-system-compilation--application-build)
-  - [5.1. Configure Buildroot Environment](#51-configure-buildroot-environment)
-  - [5.2. Build Base System Image (build_all)](#52-build-base-system-image-build_all)
-  - [5.3. Cross-Compile and Install CivetWeb Library](#53-cross-compile-and-install-civetweb-library)
-  - [5.4. Deploy Application & Helper Scripts](#54-deploy-application--helper-scripts)
-  - [5.5. Download YOLOv8 CVIMODEL Repository](#55-download-yolov8-cvimodel-repository)
-  - [5.6. Container Directory Structure](#56-container-directory-structure)
 - [06. System Image Deployment](#06-system-image-deployment)
-  - [6.1. Host Dependency Collection (collect_libraries.sh)](#61-host-dependency-collection-collect_librariessh)
-  - [6.2. Flash Image, Stage Assets & Automated Wi-Fi Setup (flash_sd.sh)](#62-flash-image-stage-assets--automated-wi-fi-setup-flash_sdsh)
-  - [6.3. Identify the Board on the Network](#63-identify-the-board-on-the-network)
-  - [6.4. Connect Through SSH](#64-connect-through-ssh)
-  - [6.5. Run Streaming Application & Access Web Interface](#65-run-streaming-application--access-web-interface)
 - [07. Current Development Scope](#07-current-development-scope)
 - [08. Software Architecture & Thermal/Performance Optimization](#08-software-architecture--thermalperformance-optimization)
   - [8.1. Source File Responsibilities](#81-source-file-responsibilities)
-  - [8.2. Core Optimization Strategies for Low CPU Usage & Heat Reduction](#82-core-optimization-strategies-for-low-cpu-usage--heat-reduction)
+  - [8.2. Core Optimization Strategies for Low CPU Usage](#82-core-optimization-strategies-for-low-cpu-usage)
+  - [8.3. Deep Dive: Technical Justifications & Code Philosophy](#83-deep-dive-technical-justifications--code-philosophy)
 - [09. References & Repositories](#09-references--repositories)
 
 ---
@@ -62,6 +44,8 @@ The current work covers system configuration, image compilation, development too
 - Prepare the CVI TDL SDK for application development.
 - Integrate CivetWeb for HTTP streaming.
 - Document the workflow for reproducibility in educational environments.
+
+![Project High-Level Workflow Placeholder](images/placeholder_project_workflow.png)
 
 ---
 
@@ -85,9 +69,6 @@ The current work covers system configuration, image compilation, development too
 | **Wireless network** | Dual-band Wi-Fi 6 and Bluetooth 5.4 on W and WE variants |
 | **USB** | 1 × USB 2.0 OTG Type-C |
 | **Expansion** | 2 × 14-pin, 2.54 mm headers |
-| **Other interfaces** | RST and BOOT buttons, power and user LEDs |
-| **Operating system** | Buildroot Linux / Debian |
-| **Dimensions** | 22.86 × 35.56 mm |
 
 ### Board Variants
 
@@ -111,6 +92,8 @@ The current work covers system configuration, image compilation, development too
 | SG2002 Subsystem Block Diagram | SG2002 System Architecture |
 |---|---|
 | <img src="images/img2.png" width="100%"> | <img src="images/img1.png" width="100%"> |
+
+![Hardware Thermal Dissipation Graph](images/placeholder_hardware_thermal.png)
 
 ---
 
@@ -147,13 +130,13 @@ docker build -t licheervnano-build-ubuntu .
 
 ### 3.3. Start the Docker Container
 
-Run this command on the host machine, replacing the source path with the absolute path of your local repository:
+Run this command on the host machine:
 
 ```bash
 docker run -v /root/LicheeRV-Nano-Build/:/workspace -it licheervnano-build-ubuntu /bin/bash
 ```
 
-Once inside the container, `/workspace` serves as the root working directory representing the `LicheeRV-Nano-Build` tree.
+![Docker Build Pipeline Diagram](images/placeholder_docker_pipeline.png)
 
 ---
 
@@ -167,8 +150,6 @@ Inside the container's `/workspace` directory:
 cd /workspace
 git clone https://github.com/milkv-duo/cvitek-tdl-sdk-sg200x.git --depth=1
 ```
-
-**Directory requirement:** The CVI TDL repository must be located at `/workspace/cvitek-tdl-sdk-sg200x` inside the container.
 
 ### 4.2. Clone CivetWeb Repository
 
@@ -196,26 +177,16 @@ git config --global --add safe.directory /workspace
 
 ### 5.2. Build Base System Image (build_all)
 
-Trigger the primary base build process **before** placing custom application code. This step builds kernel headers, toolchains, ISP header files, middleware libraries, and the Buildroot sysroot:
+Trigger the primary base build process **before** placing custom application code:
 
 ```bash
 cd /workspace
 build_all
 ```
 
-> **Note:** The full base compilation (`build_all`) is a highly resource-intensive process. Depending on host hardware capabilities (CPU core count, RAM allocation, and disk I/O speed), this step typically takes between **30 minutes to over 1 hour** to complete.
-
-Once compilation successfully completes, the build system generates the final flashable image inside the following path:
-
-```text
-/workspace/install/soc_sg2002_licheervnano_sd/images/<TIMESTAMP_AND_HASH>.img
-```
-
-*(For example: `/workspace/install/soc_sg2002_licheervnano_sd/images/2026-10-31-01-07-d4003f.img` or generically referred to as `xxx.img` since the timestamp and commit hash vary with each build execution).*
+![Buildroot Compilation Process Flow](images/placeholder_buildroot_flow.png)
 
 ### 5.3. Cross-Compile and Install CivetWeb Library
-
-To prevent compilation errors caused by missing CivetWeb headers or static libraries during application build, cross-compile CivetWeb using the RISC-V toolchain and install `libcivetweb.a` and `civetweb.h` directly into Buildroot's sysroot directory:
 
 ```bash
 cd /workspace/civetweb && make WITH_CPP=0 WITH_LUA=0 WITH_IPV6=1 COMS_CFLAGS="-O2" CC=/workspace/host-tools/gcc/riscv64-linux-musl-x86_64/bin/riscv64-unknown-linux-musl-gcc AR=/workspace/host-tools/gcc/riscv64-linux-musl-x86_64/bin/riscv64-unknown-linux-musl-ar lib && cp libcivetweb.a /workspace/buildroot/output/host/riscv64-buildroot-linux-musl/sysroot/usr/lib/ && cp include/civetweb.h /workspace/buildroot/output/host/riscv64-buildroot-linux-musl/sysroot/usr/include/
@@ -223,18 +194,11 @@ cd /workspace/civetweb && make WITH_CPP=0 WITH_LUA=0 WITH_IPV6=1 COMS_CFLAGS="-O
 
 ### 5.4. Deploy Application & Helper Scripts
 
-Clone the thesis streaming application repository into a temporary directory. Move the `http_streamer_tdl` project folder into the Buildroot middleware path, copy the deployment helper scripts (`collect_libraries.sh` and `flash_sd.sh`) into `/workspace`, and remove temporary files:
-
 ```bash
 git clone https://github.com/m0nkeyh4ck/licheerv-nano-sg2002-yolo-streaming /tmp/repo
 mv /tmp/repo/http_streamer_tdl /workspace/middleware/v2/sample/
 cp /tmp/repo/*.sh /workspace/ 2>/dev/null || true
 rm -rf /tmp/repo
-```
-
-Now navigate to the application directory and compile it:
-
-```bash
 cd /workspace/middleware/v2/sample/http_streamer_tdl
 make clean
 make
@@ -242,69 +206,16 @@ make
 
 ### 5.5. Download YOLOv8 CVIMODEL Repository
 
-Inside the container's `/workspace` directory, clone the repository containing the pre-compiled INT8 YOLOv8 model file (`yolov8n_cv181x_int8_sym.cvimodel`):
-
 ```bash
 cd /workspace
 git clone https://github.com/zwyzwm/YOLOv8-Object-Detection.git
-```
-
-### 5.6. Container Directory Structure
-
-The complete project directory tree inside the container is organized as follows:
-
-```text
-/workspace/
-├── build/
-├── buildroot/
-│   └── output/
-│       └── host/
-│           └── riscv64-buildroot-linux-musl/
-│               └── sysroot/
-├── civetweb/
-│   ├── include/
-│   │   └── civetweb.h
-│   └── src/
-│       └── civetweb.c
-├── collect_libraries.sh
-├── flash_sd.sh
-├── cvitek-tdl-sdk-sg200x/
-├── middleware/
-│   └── v2/
-│       └── sample/
-│           └── http_streamer_tdl/
-│               ├── fmp4_init_segment.c
-│               ├── fmp4_init_segment.h
-│               ├── http_streamer_tdl.c
-│               ├── Makefile
-│               ├── mse_stream.c
-│               ├── mse_stream.h
-│               ├── sensor_config.c
-│               ├── sensor_config.h
-│               ├── vb_pool.c
-│               ├── vb_pool.h
-│               ├── venc_handler.c
-│               ├── venc_handler.h
-│               ├── vi_init.c
-│               ├── vi_init.h
-│               ├── vpss_init.c
-│               ├── vpss_init.h
-│               ├── web_handler.c
-│               └── web_handler.h
-└── YOLOv8-Object-Detection/
-    ├── README.md
-    └── yolov8n_cv181x_int8_sym.cvimodel
 ```
 
 ---
 
 ## 06. System Image Deployment
 
-> **Execution Context Note:** All steps in Section 06 are performed **on the host machine (outside the Docker container)**. Exit the container (`exit`) or open a new host terminal. Direct host OS privileges are required to access physical block devices (`/dev/sdX`), mount SD card partitions, scan local network ranges, and initiate SSH sessions. Because `/workspace` inside the container maps directly to `/root/LicheeRV-Nano-Build` on the host, all cloned scripts (`collect_libraries.sh` and `flash_sd.sh`) are already available in your host working directory.
-
 ### 6.1. Host Dependency Collection (collect_libraries.sh)
-
-Before flashing the system image, execute the `collect_libraries.sh` script located in the root repository. This script automatically scans and extracts all required dynamic shared libraries (`.so`) from Buildroot, CVI TDL SDK, TPU, and OpenCV directories, placing them into a flat directory structure (`/root/LicheeRV-Nano-Build/libraries`).
 
 Run the script from your **host machine**:
 
@@ -316,22 +227,13 @@ chmod +x collect_libraries.sh
 
 ### 6.2. Flash Image, Stage Assets & Automated Wi-Fi Setup (flash_sd.sh)
 
-The `flash_sd.sh` script automates the complete SD card deployment. It writes the compiled image, mounts the `rootfs` partition, stages the application binary (`http_streamer_tdl`), YOLO model (`yolov8n_cv181x_int8_sym.cvimodel`), and dynamic libraries (`libraries/`) into `/root`, and configures the system `LD_LIBRARY_PATH` alongside automatic Wi-Fi credentials.
-
-> **IMPORTANT CONFIGURATION BEFORE EXECUTION:**
->
-> Edit `flash_sd.sh` on your host machine to set your specific target parameters:
-> - `IMG`: Full path to your generated `.img` file.
-> - `DEVICE`: Target MicroSD card block device (e.g., `/dev/sda` or `/dev/mmcblk0`).
-> - `YOUR_WIFI_SSID` & `YOUR_WIFI_PASSWORD`: Your wireless network credentials.
-
 Open and edit the script on the host machine:
 
 ```bash
 nano /root/LicheeRV-Nano-Build/flash_sd.sh
 ```
 
-Grant execution permissions and run the deployment script on your **host machine**:
+Execute:
 
 ```bash
 cd /root/LicheeRV-Nano-Build
@@ -341,65 +243,30 @@ chmod +x flash_sd.sh
 
 ### 6.3. Identify the Board on the Network
 
-Insert the MicroSD card into the LicheeRV Nano and connect power. From a host terminal, locate the board's assigned IP address:
-
 ```bash
 sudo nmap -sV -p 22 192.168.1.0/24
 ```
 
 ### 6.4. Connect Through SSH
 
-From your host system, connect to the board using SSH:
-
 ```bash
 ssh root@<BOARD_IP_ADDRESS>
 ```
 
-Upon login, verify that all staged assets are present in `/root`:
-
-```bash
-ls -la /root
-```
-
-Expected contents inside `/root`:
-- `http_streamer_tdl` (Executable binary with `+x` permissions)
-- `yolov8n_cv181x_int8_sym.cvimodel` (Model file)
-- `libraries/` (Directory containing flattened dynamic link libraries)
-
-### 6.5. Run Streaming Application & Access Web Interface
-
-To launch the real-time AI object detection streaming server, execute the binary on the board, passing the pre-compiled YOLOv8 `.cvimodel` file as an argument:
+### 6.5. Run Streaming Application
 
 ```bash
 cd /root
 ./http_streamer_tdl yolov8n_cv181x_int8_sym.cvimodel
 ```
 
-Upon execution, the application initializes the camera ISP pipeline (VI), configures dual VPSS channels, starts H.264 video encoding, loads the YOLOv8 model into the TPU via CVI TDL SDK, and launches the embedded CivetWeb server on port `8080`.
-
-To view the live stream with real-time detection bounding box overlays:
-1. Open a modern web browser on any device (PC, smartphone, or tablet) connected to the same local network.
-2. Navigate to the board's web interface URL:
-   ```text
-   http://<BOARD_IP_ADDRESS>:8080/
-   ```
+![Web Interface Streaming Output](images/placeholder_web_interface.png)
 
 ---
 
 ## 07. Current Development Scope
 
 The repository documents the setup and configuration of the embedded Linux environment and the supporting software required for development on the SG2002 platform.
-
-The current workflow covers:
-
-- Buildroot configuration and system image compilation.
-- Docker-based development environment.
-- CVI TDL SDK setup and configuration.
-- CivetWeb integration for HTTP streaming.
-- MicroSD image deployment with dynamic library and model staging.
-- Wireless networking and SSH access.
-
-YOLO deployment, inference validation, and performance evaluation remain part of the ongoing thesis work.
 
 ---
 
@@ -427,7 +294,7 @@ The streaming application (`http_streamer_tdl`) is engineered specifically for r
 
 ---
 
-### 8.2. Core Optimization Strategies for Low CPU Usage & Heat Reduction
+### 8.2. Core Optimization Strategies for Low CPU Usage
 
 #### 1. Hardware Pipeline Offloading (Zero-CPU Video/AI Pipeline)
 Instead of processing frames in software via CPU routines:
@@ -436,71 +303,128 @@ Instead of processing frames in software via CPU routines:
 - **NPU Acceleration (`TPU / CVI_TDL`)** handles INT8 YOLOv8 tensor operations on dedicated silicon, leaving the RISC-V host CPU idling.
 - **Hardware Encoder (`VENC`)** compresses raw NV21 frames directly into H.264 streams in real-time.
 
+![Hardware Offloading Block Diagram](images/placeholder_hardware_pipeline.png)
+
 #### 2. Zero Per-Frame Heap Allocation (Persistent Dynamic Buffering)
 Executing `malloc()` and `free()` inside 30 FPS high-frequency loops causes kernel heap fragmentation, system calls overhead, thermal throttling, and CPU spikes.
 
-To eliminate this, `venc_handler.c` and `mse_stream.c` utilize **persistent capacity-expanding buffers**. Buffers expand only when encountering larger frame sizes and reuse memory indefinitely:
-
-```c
-// Example from venc_handler.c: Ring buffer memory reuse
-pthread_mutex_lock(&g_frame_lock);
-
-int idx = g_frame_write_idx;
-if (g_frame_ring[idx].capacity < total_size) {
-    // Reallocate only when required by larger keyframe spikes
-    uint8_t *new_ptr = realloc(g_frame_ring[idx].data, total_size + 16384);
-    if (new_ptr) {
-        g_frame_ring[idx].data = new_ptr;
-        g_frame_ring[idx].capacity = total_size + 16384;
-    }
-}
-
-// Memory is reused directly without freeing between frames
-memcpy(g_frame_ring[idx].data, stStream.pstPack[i].pu8Addr, total_size);
-g_frame_ring[idx].size = total_size;
-```
+To eliminate this, `venc_handler.c` and `mse_stream.c` utilize **persistent capacity-expanding buffers**. Buffers expand only when encountering larger frame sizes and reuse memory indefinitely.
 
 #### 3. Passive Thread Synchronization (`pthread_cond_t` vs Polling)
-Polling loops with `usleep()` consume CPU cycles during sleep-wake transitions and introduce jitter.
-
-The streaming handlers (`mse_stream.c` and `web_handler.c`) utilize POSIX condition variables (`pthread_cond_timedwait`). When no new frame is ready, HTTP worker threads sleep passively with **0% CPU usage**, waking up instantly via `pthread_cond_broadcast()` when the `VENC` thread writes a new frame:
-
-```c
-// Example from mse_stream.c: Passive condition wait loop
-pthread_mutex_lock(&g_frame_lock);
-while (!g_bExit && (!g_frame_ring[next].data || next == g_frame_write_idx)) {
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_nsec += 50000000; // 50ms timeout guard
-    if (ts.tv_nsec >= 1000000000) { ts.tv_sec += 1; ts.tv_nsec -= 1000000000; }
-    
-    // CPU thread yields completely until woken by the VENC encoder thread
-    pthread_cond_timedwait(&g_frame_cond, &g_frame_lock, &ts);
-    next = (last_sent_idx + 1) % BUFFER_SIZE;
-}
-```
+Polling loops with `usleep()` consume CPU cycles during sleep-wake transitions and introduce jitter. The streaming handlers utilize POSIX condition variables (`pthread_cond_timedwait`).
 
 #### 4. Mutex Decoupling from Network Socket I/O
-Performing slow blocking socket writes (`mg_write`) inside critical section locks causes thread starvation and blocks video capture pipelines.
+Performing slow blocking socket writes (`mg_write`) inside critical section locks causes thread starvation and blocks video capture pipelines. In `web_handler.c`, frame data is copied locally inside a fast mutex lock, and the lock is **released immediately prior to network transmission**.
 
-In `web_handler.c`, frame data is copied locally inside a fast mutex lock, and the lock is **released immediately prior to network transmission**:
+---
 
+### 8.3. Deep Dive: Technical Justifications & Code Philosophy
+
+This section serves as a comprehensive textbook-level explanation of **why** specific libraries, code structures, and paradigms were chosen over conventional alternatives. Developing for an embedded RISC-V SoC with 256MB of shared DDR memory requires abandoning standard desktop-level programming practices.
+
+#### 8.3.1. The Justification for fMP4 and MSE over MJPEG or WebSockets
+*Referencing: `fmp4_init_segment.c` and `mse_stream.c`*
+
+In many embedded IP cameras, **MJPEG (Motion JPEG)** is the default streaming protocol because it is trivial to implement: the server simply takes an array of JPEG images and sends them over HTTP in a multipart stream. 
+**Why we rejected MJPEG:**
+1. **Bandwidth Annihilation:** A 1080p JPEG image can be 200KB-500KB. At 30 FPS, MJPEG requires between 48 Mbps to 120 Mbps of network bandwidth. This saturates the LicheeRV Nano's Wi-Fi module immediately, causing severe frame drops.
+2. **Missing NPU Advantages:** MJPEG encodes each frame from scratch, completely ignoring temporal redundancy (the fact that backgrounds don't change).
+
+**Why we rejected WebSockets with Raw H.264:**
+While we use the hardware `VENC` to generate H.264 NALUs (Network Abstraction Layer Units), sending raw NALUs over WebSockets requires the browser client to use software decoders (like Broadway.js) via WebAssembly. Software decoding in the browser is CPU-intensive for the client and introduces massive latency.
+
+**The Solution: Media Source Extensions (MSE) with fragmented MP4 (fMP4):**
+By packing the raw H.264 NALUs into an MP4 container on the fly (`fmp4_init_segment.c`), we allow the receiving web browser to use its native hardware video decoder via the HTML5 `<video>` tag. 
+*   **The Initialization Segment (`ftyp` + `moov`):** Created exactly once when a client connects. It tells the browser the resolution (1920x1080), framerate, and provides the SPS/PPS metadata required by H.264.
+*   **The Fragments (`moof` + `mdat`):** Each time the `VENC` thread provides a new frame, we wrap it in a fragment. 
+*   **Zero-Overhead Parsing:** We built a custom Annex-B to AVCC parser (`annexb_copy_cb`). Instead of using large libraries like FFmpeg (which would bloat our binary and consume RAM), we parse the 4-byte `0x00000001` NALU delimiters using a raw pointer slide in C. 
+
+![fMP4 vs MJPEG Bandwidth and Processing Comparison](images/placeholder_mse_vs_mjpeg.png)
+
+#### 8.3.2. Dynamic Ring Buffer Architecture
+*Referencing: `venc_handler.c` (`g_frame_ring`)*
+
+The system must handle multiple concurrent HTTP clients without duplicating memory. 
+
+**The naive approach (which we avoided):**
+Allocating a new buffer `malloc(frame_size)` every time the hardware generates a frame, appending it to a linked list, and freeing it after clients read it. In an embedded system, this causes memory fragmentation. The Linux OOM (Out-of-Memory) killer would eventually terminate our process.
+
+**Our Architecture: Pre-allocated Circular Ring Buffer**
+We declare an array of structs `g_frame_ring[BUFFER_SIZE]`.
 ```c
-// Example from web_handler.c: Fast copy and lock release before I/O
-pthread_mutex_lock(&g_frame_lock);
-// ... wait for frame ...
-memcpy(local_buf, g_frame_ring[next].data, size);
-last_idx = next;
-
-// Mutex lock is UNLOCKED before blocking TCP socket operations
-pthread_mutex_unlock(&g_frame_lock);
-
-// Network latency cannot block hardware VENC encoding thread
-int written = mg_write(conn, local_buf, size);
+// Dynamic expansion logic in venc_handler.c
+if (g_frame_ring[idx].capacity < total_size) {
+    uint8_t *new_ptr = realloc(g_frame_ring[idx].data, total_size + 16384);
+    // ...
+}
 ```
+*   **Why `+ 16384`?** We pad the reallocation. I-frames (Keyframes) are significantly larger than P-frames. By adding a 16KB padding during `realloc`, we ensure that future I-frames fit without triggering another costly system call. Over the first few seconds of streaming, the buffer capacities stabilize to the maximum possible frame size, and `realloc` is **never called again**. Memory footprint remains strictly flat.
 
-#### 5. Efficient NPU Overlay & Label Mapping
-In `venc_handler.c`, the NPU inference thread (`run_tdl_thread`) processes detection outputs and maps integer COCO class IDs (`stObjMeta.info[i].classes`) directly to an array of static class strings (`COCO_CLASSES[cls]`) along with confidence percentage scores (`stObjMeta.info[i].bbox.score`). Hardware vector drawing routines (`CVI_TDL_Service_ObjectDrawRect`) overlay bounding boxes and English labels on video frames prior to H.264 compression, requiring zero client-side browser rendering computation.
+![Ring Buffer Memory Lifecycle Diagram](images/placeholder_ring_buffer.png)
+
+#### 8.3.3. Threading Synchronization: Mutex vs Spinlocks vs Condition Variables
+*Referencing: `http_streamer_tdl.c` and `mse_stream.c`*
+
+We have a classic Producer-Consumer problem:
+*   **Producer:** `run_venc_thread` (Hardware encoder feeding H.264 frames).
+*   **Consumer:** `handler_stream_mse` (HTTP clients requesting data).
+
+**Why not Polling?**
+```c
+// BAD CODE EXAMPLE - REJECTED
+while(!new_frame) {
+    usleep(1000); // Sleeps for 1ms
+}
+```
+`usleep` forces a context switch. Waking up the thread 1000 times a second to check a boolean flag completely saturates one CPU core, generating severe heat (thermal throttling).
+
+**The implementation used: `pthread_cond_timedwait`**
+```c
+struct timespec ts;
+clock_gettime(CLOCK_REALTIME, &ts);
+ts.tv_nsec += 50000000; // 50ms timeout
+pthread_cond_timedwait(&g_frame_cond, &g_frame_lock, &ts);
+```
+1.  The HTTP thread locks the mutex, checks if a frame is available.
+2.  If not, it calls `pthread_cond_timedwait`. This **atomically unlocks the mutex and puts the thread to sleep**. The CPU usage drops instantly to 0%.
+3.  When the `VENC` thread finishes copying a frame, it calls `pthread_cond_broadcast(&g_frame_cond)`.
+4.  The kernel instantly wakes up *all* sleeping HTTP threads, relocks the mutex, and serves the frame with sub-millisecond latency. 
+5.  *Why `timedwait` instead of infinite wait?* The 50ms timeout acts as a dead-man's switch. If the camera hardware freezes, the HTTP thread will wake up, verify the exit flag (`g_bExit`), and close gracefully instead of becoming a zombie thread.
+
+![Producer-Consumer Thread Synchronization Diagram](images/placeholder_thread_sync.png)
+
+#### 8.3.4. Overcoming Network Head-of-Line Blocking
+In embedded systems with cheap Wi-Fi modules, TCP transmission can stall due to packet loss or interference. 
+
+If we send data to the network *while* holding the global frame mutex:
+```c
+// BAD PATTERN
+pthread_mutex_lock(&g_frame_lock);
+mg_write(conn, data, size); // Blocks for 200ms if Wi-Fi is bad
+pthread_mutex_unlock(&g_frame_lock);
+```
+This implies the `VENC` hardware thread cannot write new frames into the ring buffer because the mutex is held by a struggling network thread. The video pipeline would crash.
+
+**Our Lock-Free I/O Pattern:**
+```c
+// GOOD PATTERN (Implemented in mse_stream.c)
+pthread_mutex_lock(&g_frame_lock);
+// 1. FAST MEMORY COPY (Microseconds)
+memcpy(frame_copy, g_frame_ring[next].data, frame_size);
+pthread_mutex_unlock(&g_frame_lock); // UNLOCK BEFORE I/O
+
+// 2. SLOW NETWORK WRITE (Milliseconds)
+send_chunk(conn, frag.data, frag.size);
+```
+By allocating a private `frame_copy` buffer per client, we enter the critical section just long enough to copy the bytes from RAM to RAM. Once unlocked, `mg_write` (CivetWeb's socket sender) can take as long as it needs over a bad Wi-Fi connection without stalling the core AI or video hardware.
+
+![Mutex Decoupling from Network I/O Diagram](images/placeholder_mutex_io.png)
+
+#### 8.3.5. Why CivetWeb?
+Instead of building an HTTP server from scratch or using bulky solutions like Nginx or Node.js (which cannot run directly embedded inside our C memory space), we integrated **CivetWeb**.
+*   **Statically Linked:** `libcivetweb.a` is compiled directly into our binary. No external daemon is required.
+*   **Pthreads Integration:** It manages its own thread pool for incoming HTTP requests.
+*   **Raw Socket Access:** It provides `mg_write` and chunked transfer encoding (`Transfer-Encoding: chunked`), which is strictly required for endless MSE video streams.
 
 ---
 
