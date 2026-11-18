@@ -45,7 +45,7 @@ The current work covers system configuration, image compilation, development too
 - Integrate CivetWeb for HTTP streaming.
 - Document the workflow for reproducibility in educational environments.
 
-![Project High-Level Workflow Placeholder](images/placeholder_project_workflow.png)
+![Project High-Level Workflow Placeholder](images/placeholder_project_workflow.jpg)
 
 ---
 
@@ -93,7 +93,7 @@ The current work covers system configuration, image compilation, development too
 |---|---|
 | <img src="images/img2.png" width="100%"> | <img src="images/img1.png" width="100%"> |
 
-![Hardware Thermal Dissipation Graph](images/placeholder_hardware_thermal.png)
+![Hardware Thermal Dissipation Graph](images/placeholder_hardware_thermal.jpg)
 
 ---
 
@@ -136,7 +136,7 @@ Run this command on the host machine:
 docker run -v /root/LicheeRV-Nano-Build/:/workspace -it licheervnano-build-ubuntu /bin/bash
 ```
 
-![Docker Build Pipeline Diagram](images/placeholder_docker_pipeline.png)
+![Docker Build Pipeline Diagram](images/placeholder_docker_pipeline.jpg)
 
 ---
 
@@ -184,7 +184,7 @@ cd /workspace
 build_all
 ```
 
-![Buildroot Compilation Process Flow](images/placeholder_buildroot_flow.png)
+![Buildroot Compilation Process Flow](images/placeholder_buildroot_flow.jpg)
 
 ### 5.3. Cross-Compile and Install CivetWeb Library
 
@@ -260,7 +260,7 @@ cd /root
 ./http_streamer_tdl yolov8n_cv181x_int8_sym.cvimodel
 ```
 
-![Web Interface Streaming Output](images/placeholder_web_interface.png)
+![Web Interface Streaming Output](images/placeholder_web_interface.jpg)
 
 ---
 
@@ -303,7 +303,7 @@ Instead of processing frames in software via CPU routines:
 - **NPU Acceleration (`TPU / CVI_TDL`)** handles INT8 YOLOv8 tensor operations on dedicated silicon, leaving the RISC-V host CPU idling.
 - **Hardware Encoder (`VENC`)** compresses raw NV21 frames directly into H.264 streams in real-time.
 
-![Hardware Offloading Block Diagram](images/placeholder_hardware_pipeline.png)
+![Hardware Offloading Block Diagram](images/placeholder_hardware_pipeline.jpg)
 
 #### 2. Zero Per-Frame Heap Allocation (Persistent Dynamic Buffering)
 Executing `malloc()` and `free()` inside 30 FPS high-frequency loops causes kernel heap fragmentation, system calls overhead, thermal throttling, and CPU spikes.
@@ -339,7 +339,7 @@ By packing the raw H.264 NALUs into an MP4 container on the fly (`fmp4_init_segm
 *   **The Fragments (`moof` + `mdat`):** Each time the `VENC` thread provides a new frame, we wrap it in a fragment. 
 *   **Zero-Overhead Parsing:** We built a custom Annex-B to AVCC parser (`annexb_copy_cb`). Instead of using large libraries like FFmpeg (which would bloat our binary and consume RAM), we parse the 4-byte `0x00000001` NALU delimiters using a raw pointer slide in C. 
 
-![fMP4 vs MJPEG Bandwidth and Processing Comparison](images/placeholder_mse_vs_mjpeg.png)
+![fMP4 vs MJPEG Bandwidth and Processing Comparison](images/placeholder_mse_vs_mjpeg.jpg)
 
 #### 8.3.2. Dynamic Ring Buffer Architecture
 *Referencing: `venc_handler.c` (`g_frame_ring`)*
@@ -360,7 +360,7 @@ if (g_frame_ring[idx].capacity < total_size) {
 ```
 *   **Why `+ 16384`?** We pad the reallocation. I-frames (Keyframes) are significantly larger than P-frames. By adding a 16KB padding during `realloc`, we ensure that future I-frames fit without triggering another costly system call. Over the first few seconds of streaming, the buffer capacities stabilize to the maximum possible frame size, and `realloc` is **never called again**. Memory footprint remains strictly flat.
 
-![Ring Buffer Memory Lifecycle Diagram](images/placeholder_ring_buffer.png)
+![Ring Buffer Memory Lifecycle Diagram](images/placeholder_ring_buffer.jpg)
 
 #### 8.3.3. Threading Synchronization: Mutex vs Spinlocks vs Condition Variables
 *Referencing: `http_streamer_tdl.c` and `mse_stream.c`*
@@ -391,7 +391,7 @@ pthread_cond_timedwait(&g_frame_cond, &g_frame_lock, &ts);
 4.  The kernel instantly wakes up *all* sleeping HTTP threads, relocks the mutex, and serves the frame with sub-millisecond latency. 
 5.  *Why `timedwait` instead of infinite wait?* The 50ms timeout acts as a dead-man's switch. If the camera hardware freezes, the HTTP thread will wake up, verify the exit flag (`g_bExit`), and close gracefully instead of becoming a zombie thread.
 
-![Producer-Consumer Thread Synchronization Diagram](images/placeholder_thread_sync.png)
+![Producer-Consumer Thread Synchronization Diagram](images/placeholder_thread_sync.jpg)
 
 #### 8.3.4. Overcoming Network Head-of-Line Blocking
 In embedded systems with cheap Wi-Fi modules, TCP transmission can stall due to packet loss or interference. 
@@ -418,7 +418,7 @@ send_chunk(conn, frag.data, frag.size);
 ```
 By allocating a private `frame_copy` buffer per client, we enter the critical section just long enough to copy the bytes from RAM to RAM. Once unlocked, `mg_write` (CivetWeb's socket sender) can take as long as it needs over a bad Wi-Fi connection without stalling the core AI or video hardware.
 
-![Mutex Decoupling from Network I/O Diagram](images/placeholder_mutex_io.png)
+![Mutex Decoupling from Network I/O Diagram](images/placeholder_mutex_io.jpg)
 
 #### 8.3.5. Why CivetWeb?
 Instead of building an HTTP server from scratch or using bulky solutions like Nginx or Node.js (which cannot run directly embedded inside our C memory space), we integrated **CivetWeb**.
