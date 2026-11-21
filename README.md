@@ -602,37 +602,19 @@ Instead of writing a fragile raw POSIX socket HTTP parser from scratch or deploy
 
 To fully appreciate how the SG2002 achieves real-time 1080p streaming alongside YOLOv8 object detection without saturating the RISC-V CPU, it is necessary to examine the internal hardware binding topology configured in `vi_init.c`, `vpss_init.c`, and `http_streamer_tdl.c`.
 
-```text
-+-------------------+      MIPI-CSI       +--------------------+      Hardware Bind      +--------------------+
-|   CMOS Sensor     | ==================> |  VI (Video Input)  | ----------------------> |  VPSS (Group 0)    |
-| (e.g., GC4653)    |   Raw Bayer Data    |  + ISP Processing  |   Zero-Copy DMA (NV21)  |  Hardware Scaler   |
-+-------------------+                     +--------------------+                         +--------------------+
-                                                                                                |        |
-                                             +--------------------------------------------------+        |
-                                             | (Channel 0: 1920x1080 NV21)                               | (Channel 1: 640x480 NV21)
-                                             v                                                           v
-+-------------------+     OSD Bounding    +--------------------+                         +--------------------+
-|   VENC (Chn 0)    | <------------------ |  run_venc_thread   |                         |  run_tdl_thread    |
-| H.264 High Prof.  |     Box Overlay     |  (CivetWeb Ring)   |                         |  (SOPHGO 1T NPU)   |
-+-------------------+                     +--------------------+                         +--------------------+
-         |                                          ^                                                    |
-         | Compressed H.264 NALUs                   |             Scaled 1080p BBoxes + Labels           |
-         +------------------------------------------+----------------------------------------------------+
-```
+![Hardware Multimedia Pipeline Architecture](images/hardware_pipeline_diagram.jpg)
 
 #### Step-by-Step Dataflow Execution:
 1. **Sensor Probing (`sensor_config.c`):**
-   - `read_sensor_config()` searches `/mnt/data/sensor_cfg.ini` and `/mnt/system/usr/bin/sensor_cfg.ini` to detect the attached MIPI-CSI camera driver (such as GalaxyCore `GC4653` or OmniVision `OS04A10`), sets the native sensor resolution (`g_sensor_w`, `g_sensor_h`), and configures the ISP tuning binary.
+  - `read_sensor_config()` searches `/mnt/data/sensor_cfg.ini` and `/mnt/system/usr/bin/sensor_cfg.ini` to detect the attached MIPI-CSI camera driver (such as GalaxyCore `GC4653` or OmniVision `OS04A10`), sets the native sensor resolution (`g_sensor_w`, `g_sensor_h`), and configures the ISP tuning binary.
 2. **Hardware Binding (`CVI_SYS_Bind` in `vpss_init.c`):**
-   - Instead of having the CPU read a frame from `VI` and manually write it into `VPSS`, `bind_vi_vpss()` establishes a direct hardware pipeline link (`CVI_ID_VI` $\rightarrow$ `CVI_ID_VPSS`). The multimedia subsystem passes physical memory block handles (`VIDEO_FRAME_INFO_S`) directly between hardware engines via DMA.
+  - Instead of having the CPU read a frame from `VI` and manually write it into `VPSS`, `bind_vi_vpss()` establishes a direct hardware pipeline link (`CVI_ID_VI` $\rightarrow$ `CVI_ID_VPSS`). The multimedia subsystem passes physical memory block handles (`VIDEO_FRAME_INFO_S`) directly between hardware engines via DMA.
 3. **Dual-Channel Hardware Scaling (`init_vpss_2ch` in `vpss_init.c`):**
-   - **Channel 0 (`VPSS_CHN_VENC`):** Outputs $1920 \times 1080$ in `PIXEL_FORMAT_NV21` (YUV 4:2:0 semi-planar) with `ASPECT_RATIO_AUTO` for high-clarity human viewing.
-   - **Channel 1 (`VPSS_CHN_TDL`):** Simultaneously downscales the exact same frame in hardware to $640 \times 480$ (`TDL_INPUT_WIDTH` $\times$ `TDL_INPUT_HEIGHT`) with `ASPECT_RATIO_NONE` (linear stretch matching YOLO input tensor expectations).
+  - **Channel 0 (`VPSS_CHN_VENC`):** Outputs $1920 \times 1080$ in `PIXEL_FORMAT_NV21` (YUV 4:2:0 semi-planar) with `ASPECT_RATIO_AUTO` for high-clarity human viewing.
+  - **Channel 1 (`VPSS_CHN_TDL`):** Simultaneously downscales the exact same frame in hardware to $640 \times 480$ (`TDL_INPUT_WIDTH` $\times$ `TDL_INPUT_HEIGHT`) with `ASPECT_RATIO_NONE` (linear stretch matching YOLO input tensor expectations).
 4. **Asynchronous Decoupled Inference & Encoding (`venc_handler.c`):**
-   - **`run_tdl_thread`:** Fetches frames from `VPSS_CHN_TDL`, submits them to the NPU via `CVI_TDL_YOLOV8_Detection()`, scales the resulting normalized bounding box coordinates (`bbox.x1`, `y1`, `x2`, `y2`) from $640 \times 480$ up to $1920 \times 1080$, formats the COCO class label and confidence percentage (e.g., `"person 92%"`), and updates `g_stObjMeta` under `ResultMutex`.
-   - **`run_venc_thread`:** Fetches 1080p frames from `VPSS_CHN_VENC` at full $30\text{ FPS}$, safely copies the latest cached detections from `g_stObjMeta` (decoupling NPU inference rate from camera capture framerate so the video stream never stutters even if a complex scene takes longer to infer), draws bounding boxes via `CVI_TDL_Service_ObjectDrawRect()`, and pushes the annotated frame into the hardware H.264 encoder (`CVI_VENC_SendFrame`).
-
----
+  - **`run_tdl_thread`:** Fetches frames from `VPSS_CHN_TDL`, submits them to the NPU via `CVI_TDL_YOLOV8_Detection()`, scales the resulting normalized bounding box coordinates (`bbox.x1`, `y1`, `x2`, `y2`) from $640 \times 480$ up to $1920 \times 1080$, formats the COCO class label and confidence percentage (e.g., `"person 92%"`), and updates `g_stObjMeta` under `ResultMutex`.
+  - **`run_venc_thread`:** Fetches 1080p frames from `VPSS_CHN_VENC` at full $30\text{ FPS}$, safely copies the latest cached detections from `g_stObjMeta` (decoupling NPU inference rate from camera capture framerate so the video stream never stutters even if a complex scene takes longer to infer), draws bounding boxes via `CVI_TDL_Service_ObjectDrawRect()`, and pushes the annotated frame into the hardware H.264 encoder (`CVI_VENC_SendFrame`).
 
 ### 8.5. Memory Budget & ION/VB Pool Engineering in 256 MB DDR3
 
