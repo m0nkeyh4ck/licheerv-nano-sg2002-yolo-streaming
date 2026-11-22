@@ -11,7 +11,7 @@
 | **Campus** | Bogotá | 
 | **Faculty** | Faculty of Engineering | 
 | **Advisor** | Carlos Iván Camargo Bareño | 
-| **Status** | 🟡 In Progress | 
+| **Status** | 🟢 Completed | 
 
 ---
 
@@ -180,8 +180,6 @@ When replicating this project in an academic laboratory, engineers and students 
 | SG2002 Subsystem Block Diagram | SG2002 System Architecture |
 |---|---|
 | <img src="images/img2.png" width="100%"> | <img src="images/img1.png" width="100%"> |
-
-![Hardware Thermal Dissipation Graph](images/placeholder_hardware_thermal.jpg)
 
 ---
 
@@ -615,6 +613,8 @@ To fully appreciate how the SG2002 achieves real-time 1080p streaming alongside 
 4. **Asynchronous Decoupled Inference & Encoding (`venc_handler.c`):**
   - **`run_tdl_thread`:** Fetches frames from `VPSS_CHN_TDL`, submits them to the NPU via `CVI_TDL_YOLOV8_Detection()`, scales the resulting normalized bounding box coordinates (`bbox.x1`, `y1`, `x2`, `y2`) from $640 \times 480$ up to $1920 \times 1080$, formats the COCO class label and confidence percentage (e.g., `"person 92%"`), and updates `g_stObjMeta` under `ResultMutex`.
   - **`run_venc_thread`:** Fetches 1080p frames from `VPSS_CHN_VENC` at full $30\text{ FPS}$, safely copies the latest cached detections from `g_stObjMeta` (decoupling NPU inference rate from camera capture framerate so the video stream never stutters even if a complex scene takes longer to infer), draws bounding boxes via `CVI_TDL_Service_ObjectDrawRect()`, and pushes the annotated frame into the hardware H.264 encoder (`CVI_VENC_SendFrame`).
+
+---
 
 ### 8.5. Memory Budget & ION/VB Pool Engineering in 256 MB DDR3
 
