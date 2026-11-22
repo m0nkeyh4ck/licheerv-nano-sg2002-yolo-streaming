@@ -53,6 +53,7 @@
   - [8.1. Source File Responsibilities](#81-source-file-responsibilities)
   - [8.2. Core Optimization Strategies for Low CPU Usage](#82-core-optimization-strategies-for-low-cpu-usage)
   - [8.3. Deep Dive: Technical Justifications & Code Philosophy](#83-deep-dive-technical-justifications--code-philosophy)
+  - [8.3.6. Embedded Web Architecture, CivetWeb Routing & Memory Management (*New*)](#836-embedded-web-architecture-civetweb-routing--memory-management-new)
   - [8.4. Hardware Multimedia Pipeline Mechanics (`VI` $\rightarrow$ `VPSS` $\rightarrow$ `VENC`/`TDL`)](#84-hardware-multimedia-pipeline-mechanics-vi--vpss--venctdl)
   - [8.5. Memory Budget & ION/VB Pool Engineering in 256 MB DDR3](#85-memory-budget--ionvb-pool-engineering-in-256-mb-ddr3)
   - [8.6. Quantization & NPU Execution Mechanics (`INT8` & `.cvimodel`)](#86-quantization--npu-execution-mechanics-int8--cvimodel)
@@ -599,6 +600,27 @@ Instead of writing a fragile raw POSIX socket HTTP parser from scratch or deploy
 - **Statically Linked (`libcivetweb.a`):** Compiled directly into our single `http_streamer_tdl` executable. Zero external web server processes or configuration files are required on the target rootfs.
 - **Native Pthreads Pool:** CivetWeb manages a configurable worker thread pool (`"num_threads", "4"`) to handle concurrent browser connections for the HTML/JS UI (`/`), raw H.264 stream (`/stream`), fMP4 MSE stream (`/mse_stream`), and telemetry endpoint (`/stats`).
 - **Direct Chunked Socket Access:** Exposes `mg_write()` and `mg_printf()`, enabling strict HTTP/1.1 `Transfer-Encoding: chunked` framing required for infinite live MSE video streams.
+
+#### 8.3.6. Embedded Web Architecture, CivetWeb Routing & Memory Management (*New*)
+*Referencing: `web_handler.c` and `http_streamer_tdl.c`*
+
+To deliver a completely standalone embedded solution without requiring an external web server root directory or disk file read operations during runtime, the user interface and HTTP routing are architected directly inside the C application binary:
+
+1. **Embedded HTML/JS Frontend (`web_handler.c`):**
+   - The complete single-page application (HTML5, CSS layout, and JavaScript client logic) is embedded as a raw string constant (`const char* html`) inside `handler_index()`. 
+   - When a web browser connects to `http://<BOARD_IP>:8080/`, CivetWeb serves this HTML page instantly with zero disk I/O overhead.
+   - The client-side JavaScript establishes an asynchronous `fetch` stream against `/mse_stream`, parses incoming fMP4 binary boxes via `parseBoxes()`, pushes them into a dynamic `SourceBuffer` queue, and renders the H.264 video smoothly using the browser's hardware-accelerated Media Source Extensions (MSE).
+
+2. **CivetWeb Request Handler Routing (`http_streamer_tdl.c`):**
+   The embedded HTTP server instance (`g_servidor_http`) is initialized via `mg_start()` with a 4-thread worker pool (`"num_threads", "4"`). Routes are explicitly registered using CivetWeb's callback routing API:
+   - `mg_set_request_handler(g_servidor_http, "/", handler_index, NULL);` — Serves the interactive user interface.
+   - `mg_set_request_handler(g_servidor_http, "/stream", handler_stream, NULL);` — Serves raw H.264 byte-streams.
+   - `mg_set_request_handler(g_servidor_http, "/mse_stream", handler_stream_mse, NULL);` — Serves chunked fMP4 fragments for browser MSE playback.
+   - `mg_set_request_handler(g_servidor_http, "/stats", handler_stats, NULL);` — Returns JSON telemetry metadata.
+
+3. **Memory Management and Zero-Copy Web Delivery:**
+   - Client connection handlers run inside independent CivetWeb worker threads. To prevent slow Wi-Fi clients from locking out the hardware encoder or other viewers, memory access is strictly decoupled: worker threads acquire `g_frame_lock` only long enough to copy frame pointers from `g_frame_ring`, releasing the mutex immediately before invoking `mg_write()` or `send_chunk()`.
+   - Dynamic allocations inside web handlers are backed by reusable persistent buffers (`local_buf`, `frame_copy`), preventing memory fragmentation and ensuring a flat, predictable RAM footprint on the SG2002's 256 MB DDR3 system throughout continuous operation.
 
 ---
 
