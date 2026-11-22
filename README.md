@@ -527,7 +527,9 @@ if (g_frame_ring[idx].capacity < total_size) {
 ```
 - **Why `+ 16384`?** In H.264 video compression, **I-frames (IDR Keyframes)** contain full spatial image data and are typically $5\times$ to $15\times$ larger than **P-frames (Predicted frames)**. By adding a $16\text{ KB}$ ($16,384\text{ bytes}$) headroom padding during `realloc`, we ensure that subsequent I-frames fit cleanly into the existing buffer without triggering another `realloc` system call. Over the first few seconds of streaming, all ring buffer slots stabilize at the peak frame capacity, and `realloc` is **never invoked again** for the remainder of runtime. The RSS memory footprint remains completely flat.
 
-![Ring Buffer Memory Lifecycle Diagram](images/placeholder_ring_buffer.jpg)
+<p align="center">
+  <img src="images/placeholder_ring_buffer.jpg" alt="Ring Buffer Memory Lifecycle Diagram">
+</p>
 
 #### 8.3.3. Threading Synchronization: Mutex vs Spinlocks vs Condition Variables
 *Referencing: `http_streamer_tdl.c` and `mse_stream.c`*
