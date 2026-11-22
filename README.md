@@ -424,8 +424,8 @@ http://<BOARD_IP_ADDRESS>:8080/
 The browser will automatically negotiate an H.264 Media Source Extensions (MSE) stream and render real-time 1080p video overlaid with YOLOv8 bounding boxes, class names, and confidence scores.
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=nm-adFs3z_g" target="_blank">
-    <img src="https://img.youtube.com/vi/nm-adFs3z_g/hqdefault.jpg" alt="Web Interface Streaming Output" />
+  <a href="https://www.youtube.com/watch?v=6Wkr_FEsmIc" target="_blank">
+    <img src="https://img.youtube.com/vi/6Wkr_FEsmIc/hqdefault.jpg" alt="Web Interface Streaming Output" />
   </a>
 </p>
 
