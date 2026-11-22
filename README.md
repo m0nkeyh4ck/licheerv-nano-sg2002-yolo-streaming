@@ -601,7 +601,7 @@ Instead of writing a fragile raw POSIX socket HTTP parser from scratch or deploy
 - **Native Pthreads Pool:** CivetWeb manages a configurable worker thread pool (`"num_threads", "4"`) to handle concurrent browser connections for the HTML/JS UI (`/`), raw H.264 stream (`/stream`), fMP4 MSE stream (`/mse_stream`), and telemetry endpoint (`/stats`).
 - **Direct Chunked Socket Access:** Exposes `mg_write()` and `mg_printf()`, enabling strict HTTP/1.1 `Transfer-Encoding: chunked` framing required for infinite live MSE video streams.
 
-#### 8.3.6. Embedded Web Architecture, CivetWeb Routing & Memory Management (*New*)
+#### 8.3.6. Embedded Web Architecture, CivetWeb Routing & Memory Management
 *Referencing: `web_handler.c` and `http_streamer_tdl.c`*
 
 To deliver a completely standalone embedded solution without requiring an external web server root directory or disk file read operations during runtime, the user interface and HTTP routing are architected directly inside the C application binary:
